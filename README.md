@@ -3,7 +3,7 @@
 | Название | Ссылка |
 |---|---|
 | **Основной файл** |
-| Google Collab | https://colab.research.google.com/drive/1WnY5NIm9JHGOsa78flaHRRzD84c-_1d7?usp=sharing | 
+| Google Collab | https://colab.research.google.com/drive/1SVevYz8TpSBrCDzUk5jhw7M94nDeTJRK?usp=sharing | 
 | **Информация о датасете** |
 | Используемый Датасет | https://www.kaggle.com/competitions/playground-series-s4e2/data
 | Оригинальный датасет | https://www.kaggle.com/datasets/aravindpcoder/obesity-or-cvd-risk-classifyregressorcluste
