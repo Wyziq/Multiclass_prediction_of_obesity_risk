@@ -1,18 +1,27 @@
-"""Utility helpers shared across notebooks."""
 
 from __future__ import annotations
 
 from functools import lru_cache
+import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
-
 import pandas as pd
 import yaml
 
+import numpy as np
+from sklearn.model_selection import StratifiedKFold, cross_validate
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, StandardScaler
+import joblib
+
+# ------ Utility functions by Polina ------
 
 def project_root() -> Path:
-    """Return absolute path to the project root (current file directory)."""
-    return Path(__file__).resolve().parent
+    """Return absolute path to the project root (one level above `src`)."""
+    return Path(__file__).resolve().parents[1]
 
 
 def load_yaml(path: Path | str) -> Dict[str, Any]:
@@ -202,6 +211,19 @@ def load_csv(
         kwargs: Extra keyword arguments forwarded to ``pandas.read_csv``.
     """
     path = get_data_path(subdir, name)
+    if not path.exists() and not subdir:
+        # Common project layouts: keep notebooks working even if data isn't in the root.
+        candidates = [
+            get_data_path("data", "raw", name),
+            get_data_path("data", name),
+        ]
+        for candidate in candidates:
+            if candidate.exists():
+                path = candidate
+                break
+        else:
+            tried = [str(path), *map(str, candidates)]
+            raise FileNotFoundError(f"CSV not found. Tried: {', '.join(tried)}")
     return pd.read_csv(path, **kwargs)
 
 
@@ -384,6 +406,201 @@ def plot_feature_distribution(
     return counts
 
 
+# ------ Feature engineering helpers (from 05_Feature_Engineering, by Vova) ------
+
+
+def make_feature_sets(
+    df: pd.DataFrame,
+    *,
+    target_col: str = "NObeyesdad_norm",
+    drop_cols: Optional[list[str]] = None,
+    body_cols: Optional[list[str]] = None,
+) -> Dict[str, tuple[pd.DataFrame, pd.Series]]:
+    """
+    Prepare feature-set variants for experiments.
+
+    By default follows 05_Feature_Engineering.ipynb:
+      - target: NObeyesdad_norm
+      - drop from features: NObeyesdad, BMI
+      - two variants: with and without anthropometry (Height/Weight)
+    """
+    if drop_cols is None:
+        drop_cols = ["NObeyesdad", "BMI"]
+    if body_cols is None:
+        # Support both original and renamed columns.
+        body_candidates = ["Height", "Weight", "Рост", "Вес"]
+        body_cols = [c for c in body_candidates if c in df.columns]
+        if not body_cols:
+            body_cols = ["Height", "Weight"]
+
+    if target_col not in df.columns:
+        raise KeyError(f"Target column not found: {target_col}")
+
+    y = df[target_col]
+    X_all = df.drop(columns=[target_col] + drop_cols, errors="ignore")
+
+    X_with_body = X_all.copy()
+    body_cols_present = [c for c in body_cols if c in X_all.columns]
+    X_no_body = X_all.drop(columns=body_cols_present, errors="ignore")
+
+    return {
+        "with_body": (X_with_body, y),
+        "no_body": (X_no_body, y),
+    }
+
+
+def make_features_info_df(
+    X: pd.DataFrame,
+    *,
+    default_group: str = "(без группы)",
+) -> pd.DataFrame:
+    """Return features info table: group, ru label, dtype (sorted by mapping group order)."""
+    group_rank = cm_group_rank()
+    rows = []
+    for col in X.columns:
+        group = cm_group(col, default=default_group)
+        rows.append(
+            {
+                "group_ru": group,
+                "group_rank": group_rank.get(group, 999),
+                "feature": col,
+                "description_ru": cm_label(col),
+                "dtype": str(X[col].dtype),
+            }
+        )
+
+    info_df = pd.DataFrame(rows)
+    if info_df.empty:
+        return info_df
+
+    return (
+        info_df.sort_values(["group_rank", "group_ru", "feature"])
+        .drop(columns=["group_rank"])
+        .reset_index(drop=True)
+    )
+
+
+def build_preprocessor_vova(
+    X: pd.DataFrame,
+    *,
+    onehot_nominal: bool = True,
+    scale_numeric: bool = True,
+) -> ColumnTransformer:
+    """
+    Build sklearn ColumnTransformer using mapping metadata:
+    - numeric: median impute (+ scaling optionally)
+    - categorical with `order` in columns_mapping.yml: OrdinalEncoder
+    - other categorical: OneHotEncoder (by default)
+    """
+    num_cols = X.select_dtypes(include=["number"]).columns.tolist()
+    cat_cols = [c for c in X.columns if c not in num_cols]
+
+    ordinal_cols = [c for c in cat_cols if cm_order(c)]
+    nominal_cols = [c for c in cat_cols if c not in ordinal_cols]
+
+    transformers = []
+
+    if num_cols:
+        num_steps = [("imputer", SimpleImputer(strategy="median"))]
+        if scale_numeric:
+            num_steps.append(("scaler", StandardScaler()))
+        transformers.append(("num", Pipeline(steps=num_steps), num_cols))
+
+    if ordinal_cols:
+        categories = [cm_order(c) for c in ordinal_cols]
+        ord_encoder = OrdinalEncoder(
+            categories=categories,
+            handle_unknown="use_encoded_value",
+            unknown_value=-1,
+        )
+        ord_pipe = Pipeline(
+            steps=[
+                ("imputer", SimpleImputer(strategy="most_frequent")),
+                ("encoder", ord_encoder),
+            ]
+        )
+        transformers.append(("ord", ord_pipe, ordinal_cols))
+
+    if nominal_cols:
+        if onehot_nominal:
+            nom_encoder = OneHotEncoder(handle_unknown="ignore")
+            nom_pipe = Pipeline(
+                steps=[
+                    ("imputer", SimpleImputer(strategy="most_frequent")),
+                    ("encoder", nom_encoder),
+                ]
+            )
+            transformers.append(("nom", nom_pipe, nominal_cols))
+        else:
+            transformers.append(("nom", "passthrough", nominal_cols))
+
+    return ColumnTransformer(transformers=transformers, remainder="drop")
+
+
+def build_pipeline_for_training_vova(
+    X: pd.DataFrame,
+    *,
+    model,
+    onehot_nominal: bool = True,
+    scale_numeric: bool = True,
+) -> Pipeline:
+    preprocessor = build_preprocessor_vova(
+        X, onehot_nominal=onehot_nominal, scale_numeric=scale_numeric
+    )
+    return Pipeline(steps=[("preprocess", preprocessor), ("model", model)])
+
+
+# ------ Utility functions by Polina ------
+
+
+def set_seed(seed: int = 42) -> None:
+    np.random.seed(seed)
+
+
+def save_joblib(obj: Any, path: str | Path) -> Path:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    joblib.dump(obj, path)
+    return path
+
+
+def load_joblib(path: str | Path) -> Any:
+    return joblib.load(path)
+
+
+def evaluate_cv(
+    pipeline,
+    X,
+    y,
+    *,
+    cv_splits: int = 5,
+    seed: int = 42,
+    scoring: Optional[Dict[str, str]] = None,
+) -> Dict[str, float]:
+    """Оценивает pipeline кросс-валидацией только на train (без утечек)."""
+    if scoring is None:
+        scoring = {"f1_macro": "f1_macro", "accuracy": "accuracy"}
+
+    cv = StratifiedKFold(n_splits=cv_splits, shuffle=True, random_state=seed)
+    res = cross_validate(pipeline, X, y, cv=cv, scoring=scoring, n_jobs=-1, return_train_score=False)
+
+    summary = {k.replace("test_", ""): float(np.mean(v)) for k, v in res.items() if k.startswith("test_")}
+    summary["cv_splits"] = cv_splits
+    summary["seed"] = seed
+    return summary
+
+
+def save_metrics(metrics: Dict[str, Any], path: str | Path) -> Path:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(metrics, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
+# -----------
+
+
+
 __all__ = [
     "project_root",
     "load_yaml",
@@ -410,4 +627,13 @@ __all__ = [
     "load_raw_df",
     "load_clean_df",
     "plot_feature_distribution",
+    "make_feature_sets",
+    "make_features_info_df",
+    "build_preprocessor_vova",
+    "build_pipeline_for_training_vova",
+    "set_seed",
+    "save_joblib",
+    "load_joblib",
+    "evaluate_cv",
+    "save_metrics",
 ]
