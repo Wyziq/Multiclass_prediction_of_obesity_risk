@@ -1,0 +1,226 @@
+schema_version: 2
+
+globals:
+  groups_order:
+    - "Признаки пищевых привычек"
+    - "Признаки физического состояния"
+    - "Дополнительные переменные"
+    - "Целевая переменная"
+
+columns:
+  Gender:
+    description_en: "Gender"
+    description_ru: "Пол"
+    short_ru: "Пол"
+    short_group_ru: "Доп."
+    group_ru: "Дополнительные переменные"
+  BMI:
+    description_en: "Body Mass Index"
+    description_ru: "Индекс массы тела"
+    short_ru: "ИМТ"
+    short_group_ru: "Доп."
+    group_ru: "Дополнительные переменные"
+  Age:
+    description_en: "Age"
+    description_ru: "Возраст"
+    short_ru: "Возраст"
+    short_group_ru: "Доп."
+    group_ru: "Дополнительные переменные"
+  Height:
+    description_en: "Height"
+    description_ru: "Рост"
+    short_ru: "Рост"
+    short_group_ru: "Доп."
+    group_ru: "Дополнительные переменные"
+  Weight:
+    description_en: "Weight"
+    description_ru: "Вес"
+    short_ru: "Вес"
+    short_group_ru: "Доп."
+    group_ru: "Дополнительные переменные"
+  family_history_with_overweight:
+    description_en: "Family history with overweight"
+    description_ru: "История ожирения в семье"
+    short_ru: "Ожирение в семье"
+    short_group_ru: "Доп."
+    group_ru: "Дополнительные переменные"
+  FAVC:
+    description_en: "Frequent consumption of high caloric food"
+    description_ru: "Частое употребление высококалорийной пищи"
+    short_ru: "Колорийная еда"
+    short_group_ru: "Пищ."
+    group_ru: "Признаки пищевых привычек"
+  FCVC:
+    description_en: "Frequency of consumption of vegetables"
+    description_ru: "Частота употребления овощей"
+    short_ru: "Овощи"
+    short_group_ru: "Пищ."
+    group_ru: "Признаки пищевых привычек"
+    order:
+      - "no"
+      - "Sometimes"
+      - "Always"
+  NCP:
+    description_en: "Number of main meals"
+    description_ru: "Количество основных приемов пищи"
+    short_ru: "Приёмы пищи"
+    short_group_ru: "Пищ."
+    group_ru: "Признаки пищевых привычек"
+    order:
+      - "1-2"
+      - "3"
+      - ">3"
+  CAEC:
+    description_en: "Consumption of food between meals"
+    description_ru: "Перекусы между приемами пищи"
+    short_ru: "Перекусы"
+    short_group_ru: "Пищ."
+    group_ru: "Признаки пищевых привычек"
+    order:
+      - "no"
+      - "Sometimes"
+      - "Frequently"
+      - "Always"
+  SMOKE:
+    description_en: "Smoke"
+    description_ru: "Курение"
+    short_ru: "Курение"
+    short_group_ru: "Доп."
+    group_ru: "Дополнительные переменные"
+  CH2O:
+    description_en: "Consumption of water daily"
+    description_ru: "Потребление воды в день"
+    short_ru: "Вода"
+    short_group_ru: "Пищ."
+    group_ru: "Признаки пищевых привычек"
+    order:
+      - "<1"
+      - "1-2"
+      - ">2"
+  SCC:
+    description_en: "Calories consumption monitoring"
+    description_ru: "Самоконтроль потребления калорий"
+    short_ru: "Монит. калорий"
+    short_group_ru: "Физ."
+    group_ru: "Признаки физического состояния"
+  FAF:
+    description_en: "Physical activity frequency"
+    description_ru: "Частота физической активности"
+    short_ru: "Физ. активность"
+    short_group_ru: "Физ."
+    group_ru: "Признаки физического состояния"
+    order:
+      - "0"
+      - "1-2"
+      - "2-4"
+      - "4-5"
+  TUE:
+    description_en: "Time using technology devices"
+    description_ru: "Время использования электронных устройств"
+    short_ru: "Гаджеты"
+    short_group_ru: "Физ."
+    group_ru: "Признаки физического состояния"
+    order:
+      - "0-2"
+      - "3-5"
+      - ">5"
+  CALC:
+    description_en: "Consumption of alcohol"
+    description_ru: "Употребление алкоголя"
+    short_ru: "Алкоголь"
+    short_group_ru: "Пищ."
+    group_ru: "Признаки пищевых привычек"
+    order:
+      - "no"
+      - "Sometimes"
+      - "Frequently"
+      - "Always"
+  MTRANS:
+    description_en: "Transportation used"
+    description_ru: "Используемый транспорт"
+    short_ru: "Транспорт"
+    short_group_ru: "Физ."
+    group_ru: "Признаки физического состояния"
+
+targets:
+  NObeyesdad:
+    description_en: "Obesity level"
+    description_ru: "Уровень ожирения"
+    short_ru: "Уровень ожир."
+    short_group_ru: "Цель"
+    group_ru: "Целевая переменная"
+    order:
+      - "Insufficient_Weight"
+      - "Normal_Weight"
+      - "Overweight_Level_I"
+      - "Overweight_Level_II"
+      - "Obesity_Type_I"
+      - "Obesity_Type_II"
+      - "Obesity_Type_III"
+    categories:
+      Insufficient_Weight:
+        description_ru: "Недостаточный вес"
+        description_en: "Insufficient_Weight"
+      Normal_Weight:
+        description_ru: "Норма"
+        description_en: "Normal_Weight"
+      Overweight_Level_I:
+        description_ru: "Избыточный вес 1 типа"
+        description_en: "Overweight_Level_I"
+      Overweight_Level_II:
+        description_ru: "Избыточный вес 2 типа"
+        description_en: "Overweight_Level_II"
+      Obesity_Type_I:
+        description_ru: "Ожирение 1 типа"
+        description_en: "Obesity_Type_I"
+      Obesity_Type_II:
+        description_ru: "Ожирение 2 типа"
+        description_en: "Obesity_Type_II"
+      Obesity_Type_III:
+        description_ru: "Ожирение 3 типа"
+        description_en: "Obesity_Type_III"
+
+  NObeyesdad_norm:
+    description_en: "Obesity level norm"
+    description_ru: "Уровень ожирения нормализованный"
+    short_ru: "Уровень ожир. норм."
+    short_group_ru: "Цель"
+    group_ru: "Целевая переменная"
+    order:
+      - "Insufficient_Weight"
+      - "Normal_Weight"
+      - "Overweight"
+      - "Obesity"
+    mapping:
+      Insufficient_Weight: Insufficient_Weight
+      Normal_Weight: Normal_Weight
+      Overweight_Level_I: Overweight
+      Overweight_Level_II: Overweight
+      Obesity_Type_I: Obesity
+      Obesity_Type_II: Obesity
+      Obesity_Type_III: Obesity
+    categories:
+      Insufficient_Weight:
+        description_ru: "Недостаточный вес"
+        description_en: "Insufficient_Weight"
+        bmi_range: "< 18.5"
+        bmi_min: 0
+        bmi_max: 18.5
+      Normal_Weight:
+        description_ru: "Норма"
+        description_en: "Normal_Weight"
+        bmi_range: "18.5–24.9"
+        bmi_min: 18.5
+        bmi_max: 25.0
+      Overweight:
+        description_ru: "Избыточный вес"
+        description_en: "Overweight"
+        bmi_range: "25.0–29.9"
+        bmi_min: 25.0
+        bmi_max: 30.0
+      Obesity:
+        description_ru: "Ожирение"
+        description_en: "Obesity"
+        bmi_range: "≥ 30.0"
+        bmi_min: 30.0
+        bmi_max: null

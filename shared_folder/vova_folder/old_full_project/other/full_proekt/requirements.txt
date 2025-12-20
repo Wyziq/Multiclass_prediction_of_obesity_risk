@@ -8,3 +8,6 @@ pyyaml>=6.0,<7 #Вова: добавил библиотеку
 ipykernel #Вова: добавил библиотеку
 joblib>=1.3
 nbformat>=5.9
+
+# Optional (for CatBoost)
+# catboost

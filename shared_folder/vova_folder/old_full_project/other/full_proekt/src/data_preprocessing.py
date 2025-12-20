@@ -194,3 +194,122 @@ def build_pipeline_for_training(
     X, _ = split_xy(df_variant)
     preprocessor = build_preprocessor(X, onehot_nominal=onehot_nominal, scale_numeric=scale_numeric)
     return Pipeline(steps=[("preprocess", preprocessor), ("model", model)])
+
+
+
+def export_prepared_data(
+    df: pd.DataFrame,
+    output_path: str | Path,
+    include_target: bool = True,
+) -> Path:
+    """Экспортирует полностью числовой датасет (для legacy-ноутбуков svm/logreg).
+
+    Особенность: legacy-ноутбуки ожидают файл 'prepared_data.csv' с уже закодированными
+    категориальными признаками. Поэтому здесь:
+      - применяем clean_base (округление дискретных + бинарные yes/no + ординальные mapping)
+      - one-hot кодируем номинальные (Gender, MTRANS) через pandas.get_dummies
+      - target NObeyesdad оставляем строковым (как в исходном датасете)
+    """
+    out = clean_base(df)
+
+    # one-hot для номинальных
+    nominal_cols = [c for c in NOMINAL_CATEGORICAL if c in out.columns]
+    if nominal_cols:
+        out = pd.get_dummies(out, columns=nominal_cols, drop_first=False)
+
+    if not include_target and TARGET_COL in out.columns:
+        out = out.drop(columns=[TARGET_COL])
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    out.to_csv(output_path, index=False)
+    return output_path
+
+# ================================
+# Helpers for unified training/predict
+# ================================
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Dict
+
+import pandas as pd
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.pipeline import Pipeline
+
+TARGET_COL = "NObeyesdad"
+
+DISCRETE_NUM_COLS = ["FCVC", "NCP", "CH2O", "FAF", "TUE"]
+YES_NO_COLS = ["family_history_with_overweight", "FAVC", "SMOKE", "SCC"]
+ORDINAL_MAPS = {
+    "CAEC": {"no": 0, "Sometimes": 1, "Frequently": 2, "Always": 3},
+    "CALC": {"no": 0, "Sometimes": 1, "Frequently": 2, "Always": 3},
+}
+
+def load_raw_dataset(path: Path) -> pd.DataFrame:
+    return pd.read_csv(path)
+
+def _base_clean(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    for c in DISCRETE_NUM_COLS:
+        if c in df.columns:
+            df[c] = df[c].round().astype(int)
+    for c in YES_NO_COLS:
+        if c in df.columns:
+            df[c] = df[c].map({"yes": 1, "no": 0}).astype(int)
+    for c, mp in ORDINAL_MAPS.items():
+        if c in df.columns:
+            df[c] = df[c].map(mp).astype(int)
+    return df
+
+def add_bmi(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    if "Weight" in df.columns and "Height" in df.columns:
+        df["BMI"] = df["Weight"] / (df["Height"] ** 2)
+    return df
+
+def save_dataset_variants(df: pd.DataFrame, out_dir: Path) -> Dict[str, pd.DataFrame]:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    df0 = _base_clean(df)
+
+    variants: Dict[str, pd.DataFrame] = {}
+
+    def _save(name: str, d: pd.DataFrame):
+        variants[name] = d
+        (out_dir / f"{name}.csv").write_text(d.to_csv(index=False), encoding="utf-8")
+
+    _save("01_full_with_height_weight", df0)
+    _save("02_with_bmi", add_bmi(df0))
+    _save("03_no_height", df0.drop(columns=["Height"]) if "Height" in df0.columns else df0)
+    _save("04_no_weight", df0.drop(columns=["Weight"]) if "Weight" in df0.columns else df0)
+
+    drop_hw = [c for c in ["Height", "Weight"] if c in df0.columns]
+    _save("05_no_height_no_weight", df0.drop(columns=drop_hw))
+
+    keep = [c for c in ["Height", "Weight", TARGET_COL] if c in df0.columns]
+    _save("06_only_height_weight", df0[keep])
+
+    return variants
+
+def make_feature_target(df: pd.DataFrame, allow_missing_target: bool = False):
+    df = df.copy()
+    if TARGET_COL in df.columns:
+        return df.drop(columns=[TARGET_COL]), df[TARGET_COL]
+    if allow_missing_target:
+        return df, None
+    raise KeyError(f"Target column '{TARGET_COL}' not found")
+
+def build_preprocessor(X: pd.DataFrame) -> ColumnTransformer:
+    num_cols = X.select_dtypes(include=["int64", "float64"]).columns.tolist()
+    cat_cols = X.select_dtypes(include=["object"]).columns.tolist()
+
+    numeric = Pipeline(steps=[("scaler", StandardScaler())])
+    categorical = Pipeline(steps=[("onehot", OneHotEncoder(handle_unknown="ignore"))])
+
+    return ColumnTransformer(
+        transformers=[
+            ("num", numeric, num_cols),
+            ("cat", categorical, cat_cols),
+        ]
+    )

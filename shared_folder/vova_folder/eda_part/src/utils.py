@@ -46,7 +46,7 @@ def get_data_path(*relative: str) -> Path:
 
 def load_columns_mapping() -> Dict[str, Any]:
     """
-    Load and return the project mapping from `columns_mapping.yml`.
+    Load and return the project mapping from `src/columns_mapping.yml`.
 
     Mapping schema:
       - `globals`: project-wide settings (e.g. `groups_order`)
@@ -56,7 +56,7 @@ def load_columns_mapping() -> Dict[str, Any]:
     return _load_columns_mapping_uncached()
 
 
-COLUMNS_MAPPING_FILE = "columns_mapping.yml"
+COLUMNS_MAPPING_FILE = "src/columns_mapping.yml"
 
 
 @lru_cache(maxsize=1)
@@ -273,7 +273,7 @@ def load_clean_df(
     """
     Load and clean the raw dataset by removing duplicate rows and
     resetting the index. Adds укрупнённую целевую переменную
-    ``NObeyesdad_norm`` согласно маппингу в columns_mapping.yml.
+    ``NObeyesdad_norm`` согласно маппингу в src/columns_mapping.yml.
     Returns a fresh DataFrame.
 
     Args:
@@ -334,6 +334,30 @@ def load_clean_df(
     df = _rename_columns(df, column_names)
 
     return df
+
+
+
+def save_clean_df_to_data(
+    filename: str = "prepared_data.csv",
+    *,
+    column_names: Optional[str] = None,
+) -> Path:
+    """
+    Save the cleaned dataset into the `data` folder as CSV.
+
+    Args:
+        filename: CSV file name inside the data folder.
+        column_names: optional renaming scheme: "short_names", "long_names", or None.
+    """
+    df = load_clean_df(column_names=column_names)
+    if "NObeyesdad" in df.columns:
+        df = df.drop(columns=["NObeyesdad"])
+    if "NObeyesdad_norm" in df.columns:
+        df = df.rename(columns={"NObeyesdad_norm": "NObeyesdad"})
+    target = get_data_path("data", filename)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(target, index=False)
+    return target
 
 
 def plot_feature_distribution(
@@ -489,7 +513,7 @@ def build_preprocessor_vova(
     """
     Build sklearn ColumnTransformer using mapping metadata:
     - numeric: median impute (+ scaling optionally)
-    - categorical with `order` in columns_mapping.yml: OrdinalEncoder
+    - categorical with `order` in src/columns_mapping.yml: OrdinalEncoder
     - other categorical: OneHotEncoder (by default)
     """
     num_cols = X.select_dtypes(include=["number"]).columns.tolist()
@@ -626,6 +650,8 @@ __all__ = [
     "DEFAULT_RAW_DATASET",
     "load_raw_df",
     "load_clean_df",
+    "save_clean_df_to_notebooks",
+    "save_clean_df_to_data",
     "plot_feature_distribution",
     "make_feature_sets",
     "make_features_info_df",
